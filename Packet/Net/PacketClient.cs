@@ -1,0 +1,153 @@
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Packet.Api;
+using Packet.Channels;
+using Packet.Logging;
+using Packet.Models;
+using Packet.Serialization;
+
+namespace Packet.Net;
+
+internal sealed class PacketClient
+{
+    readonly ChannelRegistry _registry = new();
+    readonly Handshake _hs = new();
+    readonly ReconnectPolicy _reconnect = new();
+
+    WebSocketTransport? _transport;
+    Dispatcher? _msg;
+    CancellationTokenSource? _cts;
+
+    string? _backendUrl;
+    string? _userId;
+    string? _roomCode;
+
+    PacketError _lastError;
+    int _reconnectActive;
+
+    internal ConnectionState State { get; private set; } = ConnectionState.Disconnected;
+    internal event Action<ConnectionState>? OnStateChanged;
+
+    internal Channel<T> GetChannel<T>(string modGuid, string name)
+        => _registry.GetOrCreate<T>($"{modGuid}/{name}", PayloadCodec.Default);
+
+    internal void ReleaseChannel(string fullId) => _registry.Remove(fullId);
+
+    internal void UnregisterMod(string modGuid)
+    {
+        var prefix = $"{modGuid}/";
+        var toRemove = _registry.ChannelIds().Where(id => id.StartsWith(prefix)).ToList();
+        foreach (var id in toRemove) _registry.Remove(id);
+    }
+
+    internal void Ping()
+    {
+        if (_transport?.State == ConnectionState.Connected)
+            _ = _transport.SendAsync("{\"type\":\"ping\"}");
+    }
+
+    internal async Task JoinRoomAsync(string backendUrl, string userId, string roomCode)
+    {
+        _backendUrl = backendUrl;
+        _userId = userId;
+        _roomCode = roomCode;
+        _reconnect.Reset();
+        await ConnectAsync();
+    }
+
+    internal async Task LeaveRoomAsync()
+    {
+        _cts?.Cancel();
+        if (_transport != null) await _transport.CloseAsync();
+        _registry.ClearTransport();
+        SetState(ConnectionState.Disconnected);
+    }
+
+    async Task ConnectAsync()
+    {
+        SetState(ConnectionState.Connecting);
+
+        var (result, hsError) = await _hs.RunAsync(_backendUrl!, _userId!, _roomCode!);
+        if (result == null)
+        {
+            SetState(ConnectionState.Disconnected);
+            if (_reconnectActive == 0 || hsError == PacketError.RoomFull)
+            {
+                PacketApi.RaiseError(hsError);
+                _cts?.Cancel();
+            }
+            return;
+        }
+
+        _cts = new CancellationTokenSource();
+        _transport = new WebSocketTransport();
+        _msg = new Dispatcher(_registry);
+
+        _transport.OnMessage += _msg.Dispatch;
+        _transport.OnConnected += OnSocketConnected;
+        _transport.OnDisconnected += () => _ = OnSocketDisconnectedAsync();
+        _transport.OnError += e => { _lastError = e; PacketLog.Error($"transport error: {e}"); };
+
+        await _transport.ConnectAsync(result.WsUrl!, result.SessionToken!);
+    }
+
+    void OnSocketConnected()
+    {
+        _reconnect.Reset();
+        _registry.SetTransport((channelId, payload, target) =>
+            _ = _transport!.SendAsync(JsonConvert.SerializeObject(new Envelope { Channel = channelId, Payload = payload, Target = target }))
+        );
+        SetState(ConnectionState.Connected);
+        PacketLog.Info($"connected in room {_roomCode}");
+    }
+
+    async Task OnSocketDisconnectedAsync()
+    {
+        var err = _lastError;
+        _lastError = PacketError.None;
+
+        _registry.ClearTransport();
+
+        if (!IsRetryable(err))
+        {
+            PacketApi.RaiseError(err);
+            SetState(ConnectionState.Disconnected);
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref _reconnectActive, 1, 0) != 0) return;
+
+        try
+        {
+            SetState(ConnectionState.Reconnecting);
+            PacketLog.Warn("disconnected so we reconnecting");
+
+            while (_reconnect.ShouldRetry)
+            {
+                try { await _reconnect.WaitAsync(_cts!.Token); }
+                catch (OperationCanceledException) { return; }
+
+                await ConnectAsync();
+                if (_transport?.State == ConnectionState.Connected) return;
+            }
+
+            PacketApi.RaiseError(PacketError.ConnectionLost);
+            SetState(ConnectionState.Disconnected);
+            PacketLog.Error("max reconnect attempts reached");
+        }
+        finally { _reconnectActive = 0; }
+    }
+
+    static bool IsRetryable(PacketError e) =>
+        e is PacketError.None or PacketError.ConnectionLost or PacketError.Throttled;
+
+    void SetState(ConnectionState state)
+    {
+        State = state;
+        OnStateChanged?.Invoke(state);
+        PacketApi.RaiseStateChanged(state);
+    }
+}

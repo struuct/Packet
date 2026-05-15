@@ -1,0 +1,7 @@
+.idea/
+*.DotSettings
+*.DotSettings.user
+bin/
+obj/
+Directory.Build.props
+Directory.Build.targets
