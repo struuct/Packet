@@ -59,7 +59,10 @@ internal sealed class WebSocketTransport
             if (_socket?.State == WebSocketState.Open)
                 await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None);
         }
-        catch { }
+        catch
+        {
+            // ignored
+        }
         finally
         {
             _cts?.Cancel();
