@@ -1,5 +1,5 @@
 # Packet
-A networking library for Gorilla Tag mods for sending messages over WebSockets without the risks of Photon RPCs or custom properties
+A networking library for Gorilla Tag mods for sending messages over WebSockets without the risks of Photon RPCs or custom properties (this uses my backend which is closed source, free to use though)
 
 > [!NOTE]
 > Packet runs on its own separately from Photon meaning your mod traffic is invisible to the game and it doesn't interfere with any of the game's networking
