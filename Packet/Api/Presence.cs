@@ -78,8 +78,8 @@ public sealed class Presence
     {
         var cutoff = DateTime.UtcNow.AddSeconds(-75).Ticks;
         var timedOut = new List<string>();
-        foreach (var (id, ticks) in LastSeen)
-            if (ticks < cutoff) timedOut.Add(id);
+        foreach (var kv in LastSeen)
+            if (kv.Value < cutoff) timedOut.Add(kv.Key);
         foreach (var id in timedOut)
         {
             LastSeen.Remove(id);
@@ -105,7 +105,12 @@ public sealed class Presence
         Cts.Cancel();
         Channel.OnMessage -= OnReceive;
         PacketRuntime.Client.OnStateChanged -= OnStateChanged;
-        try { Channel.Send(new PresencePayload { Active = false }); } catch { }
+        try { Channel.Send(new PresencePayload { Active = false }); }
+        catch
+        {
+            // ignored
+        }
+
         ClearAll();
     }
 }
