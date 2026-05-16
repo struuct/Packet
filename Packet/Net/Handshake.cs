@@ -33,7 +33,8 @@ internal sealed class Handshake
                 var error = response.StatusCode == HttpStatusCode.ServiceUnavailable
                     ? PacketError.RoomFull
                     : PacketError.HandshakeFailed;
-                PacketLog.Error($"handshake rejected: HTTP {(int)response.StatusCode}");
+                var detail = await response.Content.ReadAsStringAsync();
+                PacketLog.Error($"handshake rejected: HTTP {(int)response.StatusCode} - {detail}");
                 return (null, error);
             }
 
