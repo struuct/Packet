@@ -62,6 +62,14 @@ public sealed class Channel<T> : Channel
         var player = Array.Find(PhotonNetwork.PlayerList, p => p.ActorNumber == actorNumber);
         return player != null && TrySend(Codec.Encode(payload), player.UserId);
     }
+    public bool SendTo(Player[] players, T payload)
+    {
+        var encoded = Codec.Encode(payload);
+        var allSent = true;
+        foreach (var p in players)
+            if (!TrySend(encoded, p.UserId)) allSent = false;
+        return allSent;
+    }
     public bool SendTo(string userId, T payload) => TrySend(Codec.Encode(payload), userId);
 
     internal override void Dispatch(Envelope envelope)
