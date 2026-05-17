@@ -54,13 +54,19 @@ internal sealed class PacketRuntime : MonoBehaviour
             var json = await resp.Content.ReadAsStringAsync();
             var match = Regex.Match(json, "\"tag_name\"\\s*:\\s*\"v?([^\"]+)\"");
             if (!match.Success) return;
-            if (new Version(match.Groups[1].Value) > new Version(Constants.Version))
+            var latest = match.Groups[1].Value;
+            
+            if (new Version(latest) > new Version(Constants.Version))
             {
                 _outdated = true;
-                PacketLog.Warn($"Packet is outdated (v{Constants.Version} -> v{match.Groups[1].Value}) - update at github.com/struuct/Packet");
+                PacketLog.Warn($"Packet is outdated (v{Constants.Version} -> v{latest}) - update at github.com/struuct/Packet");
+                RunOnMainThread(() => NotificationManager.ShowOutdated(Constants.Version, latest));
             }
         }
-        catch { }
+        catch
+        {
+            // ignored
+        }
     }
 
     static async System.Threading.Tasks.Task JoinAsync()
