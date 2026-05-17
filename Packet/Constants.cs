@@ -2,7 +2,7 @@ namespace Packet;
 
 internal static class Constants
 {
-    public const string Version = "1.0.0";
+    public const string Version = "1.0.1";
     public const string ModName = "Packet";
     public const string Guid = "struct.packet";
     
