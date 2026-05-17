@@ -145,6 +145,7 @@ PacketApi.OnError += error =>
 |---|---|
 | `Send(T payload)` | Sends to everyone else in the room. Returns `true` if sent now, `false` if queued |
 | `SendTo(Player player, T payload)` | Sends to one player only. Returns `true` if sent now, `false` if queued |
+| `SendTo(int actorNumber, T payload)` | Same but takes a Photon actor number. Returns `false` if the actor isn't in the room |
 | `SendTo(string userId, T payload)` | Same but takes a user ID string instead of a player |
 | `OnMessage` | Fires when a message arrives, `Action<Player?, T>` first arg is the sender. Can be `null` if they left before the message was processed. When you join a room you'll get the last broadcast on each channel automatically |
 
