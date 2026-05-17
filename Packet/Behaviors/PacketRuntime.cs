@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Concurrent;
+using System.Net.Http;
+using System.Text.RegularExpressions;
 using Packet.Logging;
 using Packet.Net;
 using UnityEngine;
@@ -10,6 +12,8 @@ internal sealed class PacketRuntime : MonoBehaviour
 {
     static PacketRuntime? Instance;
     static readonly ConcurrentQueue<Action> Queue = new();
+    static readonly HttpClient VersionHttp = new();
+    static bool _outdated;
 
     internal static PacketClient Client { get; } = new();
 
@@ -18,6 +22,7 @@ internal sealed class PacketRuntime : MonoBehaviour
         if (Instance) { Destroy(gameObject); return; }
         Instance = this;
         DontDestroyOnLoad(gameObject);
+        _ = CheckVersionAsync();
         PacketLog.Info("PacketRuntime ready");
     }
 
@@ -37,8 +42,31 @@ internal sealed class PacketRuntime : MonoBehaviour
 
     internal static void OnRoomJoined() => _ = JoinAsync();
 
+    static async System.Threading.Tasks.Task CheckVersionAsync()
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get,
+                "https://api.github.com/repos/struuct/Packet/releases/latest");
+            req.Headers.TryAddWithoutValidation("User-Agent", Constants.Guid);
+            var resp = await VersionHttp.SendAsync(req);
+            if (!resp.IsSuccessStatusCode) return;
+            var json = await resp.Content.ReadAsStringAsync();
+            var match = Regex.Match(json, "\"tag_name\"\\s*:\\s*\"v?([^\"]+)\"");
+            if (!match.Success) return;
+            if (new Version(match.Groups[1].Value) > new Version(Constants.Version))
+            {
+                _outdated = true;
+                PacketLog.Warn($"Packet is outdated (v{Constants.Version} -> v{match.Groups[1].Value}) - update at github.com/struuct/Packet");
+            }
+        }
+        catch { }
+    }
+
     static async System.Threading.Tasks.Task JoinAsync()
     {
+        if (_outdated) { PacketLog.Warn("Packet is outdated, skipping connect"); return; }
+
         var room = Photon.Pun.PhotonNetwork.CurrentRoom?.Name ?? string.Empty;
         if (string.IsNullOrEmpty(room)) return;
 

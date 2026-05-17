@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Packet.Api;
 using Packet.Logging;
 using Packet.Models;
 
@@ -18,7 +19,8 @@ internal sealed class Handshake
         var body = JsonConvert.SerializeObject(new HandshakeRequest
         {
             UserId = userId,
-            RoomCode = roomCode
+            RoomCode = roomCode,
+            Mods = PacketApi.GetRegisteredMods()
         });
 
         try
@@ -53,19 +55,20 @@ internal sealed class Handshake
 
 internal sealed class HandshakeRequest
 {
-    [JsonProperty("userId")] public string? UserId { get; set; }
-    [JsonProperty("roomCode")] public string? RoomCode { get; set; }
+    [JsonProperty("userId")]   public string?   UserId   { get; set; }
+    [JsonProperty("roomCode")] public string?   RoomCode { get; set; }
+    [JsonProperty("mods")]     public string[]? Mods     { get; set; }
 }
 
 internal sealed class HandshakeResponse
 {
     [JsonProperty("sessionToken")] public string? SessionToken { get; set; }
-    [JsonProperty("wsUrl")] public string? WsUrl { get; set; }
-    [JsonProperty("version")] public string? Version { get; set; }
+    [JsonProperty("wsUrl")]        public string? WsUrl        { get; set; }
+    [JsonProperty("version")]      public string? Version      { get; set; }
 }
 
 internal sealed class HandshakeResult
 {
     internal string? SessionToken { get; set; }
-    internal string? WsUrl { get; set; }
+    internal string? WsUrl        { get; set; }
 }
