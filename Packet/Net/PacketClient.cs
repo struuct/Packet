@@ -27,6 +27,7 @@ internal sealed class PacketClient
 
     PacketError _lastError;
     int _reconnectActive;
+    volatile bool _stopping;
 
     internal ConnectionState State { get; private set; } = ConnectionState.Disconnected;
     internal event Action<ConnectionState>? OnStateChanged;
@@ -51,6 +52,7 @@ internal sealed class PacketClient
 
     internal async Task JoinRoomAsync(string backendUrl, string userId, string roomCode)
     {
+        _stopping = false;
         _backendUrl = backendUrl;
         _userId = userId;
         _roomCode = roomCode;
@@ -60,6 +62,7 @@ internal sealed class PacketClient
 
     internal async Task LeaveRoomAsync()
     {
+        _stopping = true;
         _cts?.Cancel();
         if (_transport != null) await _transport.CloseAsync();
         _registry.ClearTransport();
@@ -71,6 +74,7 @@ internal sealed class PacketClient
         SetState(ConnectionState.Connecting);
 
         var (result, hsError) = await _hs.RunAsync(_backendUrl!, _userId!, _roomCode!);
+        if (_stopping) return;
         if (result == null)
         {
             SetState(ConnectionState.Disconnected);
@@ -106,6 +110,7 @@ internal sealed class PacketClient
 
     async Task OnSocketDisconnectedAsync()
     {
+        if (_stopping) { SetState(ConnectionState.Disconnected); return; }
         var err = _lastError;
         _lastError = PacketError.None;
 
