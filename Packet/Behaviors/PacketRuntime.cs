@@ -14,6 +14,7 @@ internal sealed class PacketRuntime : MonoBehaviour
     static readonly ConcurrentQueue<Action> Queue = new();
     static readonly HttpClient VersionHttp = new();
     static bool _outdated;
+    float _pingTimer;
 
     internal static PacketClient Client { get; } = new();
 
@@ -30,6 +31,13 @@ internal sealed class PacketRuntime : MonoBehaviour
     {
         while (Queue.TryDequeue(out var action))
             action();
+
+        _pingTimer += Time.deltaTime;
+        if (_pingTimer >= 45f)
+        {
+            _pingTimer = 0f;
+            Client.Ping();
+        }
     }
 
     void OnDestroy()
