@@ -33,7 +33,7 @@ internal sealed class PacketRuntime : MonoBehaviour
             action();
 
         _pingTimer += Time.deltaTime;
-        if (_pingTimer >= 45f)
+        if (_pingTimer >= 90f)
         {
             _pingTimer = 0f;
             Client.Ping();
