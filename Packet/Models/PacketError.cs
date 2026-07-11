@@ -9,6 +9,8 @@ public enum PacketError
     Throttled,
     PayloadTooLarge,
     InvalidFrame,
+    NamespaceForbidden,
+    NamespaceMismatch,
     ConnectionLost
 }
 

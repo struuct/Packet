@@ -4,6 +4,6 @@ namespace Packet.Behaviors;
 
 internal sealed class Callbacks : MonoBehaviourPunCallbacks
 {
-    public override void OnJoinedRoom() => PacketRuntime.OnRoomJoined();
-    public override void OnLeftRoom() => PacketRuntime.OnRoomLeft();
+    public override void OnJoinedRoom() => Runtime.OnRoomJoined();
+    public override void OnLeftRoom() => Runtime.OnRoomLeft();
 }

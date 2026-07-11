@@ -40,15 +40,45 @@ internal sealed class Handshake
                 return (null, error);
             }
 
-            var hs = JsonConvert.DeserializeObject<HandshakeResponse>(await response.Content.ReadAsStringAsync());
-            if (hs!.Version != Constants.BackendProtocolVersion)
+            var content = await response.Content.ReadAsStringAsync();
+            var hs = JsonConvert.DeserializeObject<HandshakeResponse>(content);
+            if (hs == null || hs.SessionToken == null || hs.SessionToken.Length == 0 || hs.WsUrl == null || hs.WsUrl.Length == 0)
+            {
+                PacketLog.Error("handshake response was missing sessionToken or wsUrl");
+                return (null, PacketError.HandshakeFailed);
+            }
+
+            if (!string.Equals(hs.Version, Constants.BackendProtocolVersion, StringComparison.Ordinal))
+            {
                 PacketLog.Warn($"backend version mismatch: expected {Constants.BackendProtocolVersion}, got {hs.Version} - update Packet");
-            return (new HandshakeResult { SessionToken = hs.SessionToken, WsUrl = hs.WsUrl }, PacketError.None);
+            }
+
+            LogHandshakeNamespaceResults(hs);
+            return (new HandshakeResult(hs.SessionToken, hs.WsUrl), PacketError.None);
         }
         catch (Exception ex)
         {
             PacketLog.Error($"handshake error: {ex.Message}");
             return (null, PacketError.HandshakeFailed);
+        }
+    }
+
+    static void LogHandshakeNamespaceResults(HandshakeResponse response)
+    {
+        foreach (var rejected in response.RejectedMods ?? Array.Empty<RejectedMod>())
+        {
+            PacketLog.Warn($"backend rejected mod namespace '{rejected.Guid}' ({rejected.Reason})");
+        }
+
+        if (response.AcceptedMods == null) return;
+
+        var registered = PacketApi.GetRegisteredMods();
+        foreach (var guid in registered)
+        {
+            if (Array.IndexOf(response.AcceptedMods, guid) < 0)
+            {
+                PacketLog.Warn($"backend did not accept registered namespace '{guid}'");
+            }
         }
     }
 }
@@ -65,10 +95,24 @@ internal sealed class HandshakeResponse
     [JsonProperty("sessionToken")] public string? SessionToken { get; set; }
     [JsonProperty("wsUrl")]        public string? WsUrl        { get; set; }
     [JsonProperty("version")]      public string? Version      { get; set; }
+    [JsonProperty("acceptedMods")] public string[]? AcceptedMods { get; set; }
+    [JsonProperty("rejectedMods")] public RejectedMod[]? RejectedMods { get; set; }
+}
+
+internal sealed class RejectedMod
+{
+    [JsonProperty("guid")] public string Guid { get; set; } = string.Empty;
+    [JsonProperty("reason")] public string Reason { get; set; } = string.Empty;
 }
 
 internal sealed class HandshakeResult
 {
-    internal string? SessionToken { get; set; }
-    internal string? WsUrl        { get; set; }
+    internal HandshakeResult(string sessionToken, string wsUrl)
+    {
+        SessionToken = sessionToken;
+        WsUrl = wsUrl;
+    }
+
+    internal string SessionToken { get; }
+    internal string WsUrl { get; }
 }

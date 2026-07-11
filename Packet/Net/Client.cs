@@ -5,20 +5,21 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Packet.Api;
 using Packet.Channels;
+using Packet.Extensions;
 using Packet.Logging;
 using Packet.Models;
 using Packet.Serialization;
 
 namespace Packet.Net;
 
-internal sealed class PacketClient
+internal sealed class Client
 {
     readonly ChannelRegistry _registry = new();
-    readonly Handshake _hs = new();
-    readonly ReconnectPolicy _reconnect = new();
+    readonly Handshake _handshake = new();
+    readonly Policy _reconnect = new();
 
-    WebSocketTransport? _transport;
-    Dispatcher? _msg;
+    Transport? _transport;
+    Dispatcher? _dispatcher;
     CancellationTokenSource? _cts;
 
     string? _backendUrl;
@@ -40,7 +41,7 @@ internal sealed class PacketClient
     internal void UnregisterMod(string modGuid)
     {
         var prefix = $"{modGuid}/";
-        var toRemove = _registry.ChannelIds().Where(id => id.StartsWith(prefix)).ToList();
+        var toRemove = _registry.ChannelIds().Where(id => id.StartsWith(prefix, StringComparison.Ordinal)).ToList();
         foreach (var id in toRemove) _registry.Remove(id);
     }
 
@@ -52,6 +53,21 @@ internal sealed class PacketClient
 
     internal async Task JoinRoomAsync(string backendUrl, string userId, string roomCode)
     {
+        if (string.IsNullOrWhiteSpace(backendUrl))
+        {
+            throw new ArgumentException("Backend URL is required.", nameof(backendUrl));
+        }
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            throw new ArgumentException("User ID is required.", nameof(userId));
+        }
+
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            throw new ArgumentException("Room code is required.", nameof(roomCode));
+        }
+
         _stopping = false;
         _backendUrl = backendUrl;
         _userId = userId;
@@ -73,7 +89,12 @@ internal sealed class PacketClient
     {
         SetState(ConnectionState.Connecting);
 
-        var (result, hsError) = await _hs.RunAsync(_backendUrl!, _userId!, _roomCode!);
+        if (_backendUrl == null || _userId == null || _roomCode == null)
+        {
+            throw new InvalidOperationException("Packet client connection state is incomplete.");
+        }
+
+        var (result, hsError) = await _handshake.RunAsync(_backendUrl, _userId, _roomCode);
         if (_stopping) return;
         if (result == null)
         {
@@ -87,15 +108,15 @@ internal sealed class PacketClient
         }
 
         _cts = new CancellationTokenSource();
-        _transport = new WebSocketTransport();
-        _msg = new Dispatcher(_registry);
+        _transport = new Transport();
+        _dispatcher = new Dispatcher(_registry);
 
-        _transport.OnMessage += _msg.Dispatch;
+        _transport.OnMessage += _dispatcher.Dispatch;
         _transport.OnConnected += OnSocketConnected;
-        _transport.OnDisconnected += () => _ = OnSocketDisconnectedAsync();
+        _transport.OnDisconnected += HandleSocketDisconnected;
         _transport.OnError += e => { _lastError = e; PacketLog.Error($"transport error: {e}"); };
 
-        await _transport.ConnectAsync(result.WsUrl!, result.SessionToken!);
+        await _transport.ConnectAsync(result.WsUrl, result.SessionToken);
     }
 
     void OnSocketConnected()
@@ -128,7 +149,7 @@ internal sealed class PacketClient
         try
         {
             SetState(ConnectionState.Reconnecting);
-            PacketLog.Warn("disconnected so we reconnecting");
+            PacketLog.Warn("disconnected; attempting to reconnect");
 
             while (_reconnect.ShouldRetry)
             {
@@ -148,6 +169,8 @@ internal sealed class PacketClient
 
     static bool IsRetryable(PacketError e) =>
         e is PacketError.None or PacketError.ConnectionLost or PacketError.Throttled;
+
+    void HandleSocketDisconnected() => OnSocketDisconnectedAsync().Forget("Packet reconnect loop");
 
     void SetState(ConnectionState state)
     {

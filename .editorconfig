@@ -1,0 +1,17 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+dotnet_sort_system_directives_first = true
+csharp_prefer_braces = true:warning
+csharp_style_namespace_declarations = file_scoped:suggestion
+dotnet_style_prefer_auto_properties = true:suggestion
+dotnet_style_predefined_type_for_locals_parameters_members = true:suggestion
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:suggestion

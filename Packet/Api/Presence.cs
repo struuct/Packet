@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Packet.Behaviors;
 using Packet.Channels;
+using Packet.Extensions;
 using Packet.Models;
 using Photon.Realtime;
 
@@ -24,9 +25,9 @@ public sealed class Presence
     {
         Channel = channel;
         Channel.OnMessage += OnReceive;
-        PacketRuntime.Client.OnStateChanged += OnStateChanged;
+        Runtime.Connection.OnStateChanged += OnStateChanged;
         BroadcastActive();
-        _ = HeartbeatLoopAsync(Cts.Token);
+        HeartbeatLoopAsync(Cts.Token).Forget("Presence heartbeat");
     }
 
     void OnStateChanged(ConnectionState state)
@@ -34,7 +35,7 @@ public sealed class Presence
         if (state == ConnectionState.Connected)
             BroadcastActive();
         else if (state == ConnectionState.Disconnected)
-            PacketRuntime.RunOnMainThread(ClearAll);
+            Runtime.RunOnMainThread(ClearAll);
     }
 
     void OnReceive(Player sender, PresencePayload payload)
@@ -70,7 +71,7 @@ public sealed class Presence
         {
             try { await Task.Delay(TimeSpan.FromSeconds(30), ct); }
             catch (OperationCanceledException) { break; }
-            PacketRuntime.RunOnMainThread(() => { BroadcastActive(); CheckTimeouts(); });
+            Runtime.RunOnMainThread(() => { BroadcastActive(); CheckTimeouts(); });
         }
     }
 
@@ -104,12 +105,8 @@ public sealed class Presence
     {
         Cts.Cancel();
         Channel.OnMessage -= OnReceive;
-        PacketRuntime.Client.OnStateChanged -= OnStateChanged;
-        try { Channel.Send(new PresencePayload { Active = false }); }
-        catch
-        {
-            // ignored
-        }
+        Runtime.Connection.OnStateChanged -= OnStateChanged;
+        Channel.Send(new PresencePayload { Active = false });
 
         ClearAll();
     }

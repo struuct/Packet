@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Packet.Logging;
 using Packet.Models;
 using Packet.Serialization;
 using Photon.Pun;
@@ -13,7 +14,7 @@ public abstract class Channel(string id)
 
     Action<string, string, string?>? _send;
     Queue<(string encoded, string? target)>? _queue;
-    const int QueueCap = 16;
+    const int MaxQueuedMessages = 16;
 
     internal void SetTransport(Action<string, string, string?> send)
     {
@@ -39,7 +40,7 @@ public abstract class Channel(string id)
     {
         if (_send != null) { _send(Id, encoded, target); return true; }
         _queue ??= new Queue<(string, string?)>();
-        if (_queue.Count >= QueueCap) _queue.Dequeue();
+        if (_queue.Count >= MaxQueuedMessages) _queue.Dequeue();
         _queue.Enqueue((encoded, target));
         return false;
     }
@@ -77,10 +78,14 @@ public sealed class Channel<T> : Channel
         try
         {
             var sender = Array.Find(PhotonNetwork.PlayerList, p => p.UserId == envelope.SenderId);
-            if (sender == null) return;
-            OnMessage?.Invoke(sender, Codec.Decode<T>(envelope.Payload));
+            var payload = envelope.Payload;
+            if (sender == null || payload == null || payload.Length == 0) return;
+            OnMessage?.Invoke(sender, Codec.Decode<T>(payload));
         }
-        catch { }
+        catch (Exception ex)
+        {
+            PacketLog.Warn($"channel '{Id}' dispatch failed: {ex.Message}");
+        }
     }
 }
 
@@ -112,7 +117,9 @@ internal sealed class ChannelRegistry
 
     internal bool TryDispatch(Envelope envelope)
     {
-        if (!Channels.TryGetValue(envelope.Channel!, out var ch)) return false;
+        var channel = envelope.Channel;
+        if (channel == null || channel.Length == 0) return false;
+        if (!Channels.TryGetValue(channel, out var ch)) return false;
         ch.Dispatch(envelope);
         return true;
     }

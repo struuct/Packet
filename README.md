@@ -109,6 +109,10 @@ PacketApi.OnError += error =>
 ## Additional Info
 - Messages will obviously only reach players in the same room
 - Payloads are capped at 4KB
+- Channel ownership is bound to the mod GUIDs declared during handshake
+- Packet normalizes mod GUID namespaces to lowercase before sending
+- Cross-namespace sends are ignored by the backend and surface `NamespaceForbidden` or `NamespaceMismatch`
+- `struct.packet`, `.presence`, and `.packet/...` are reserved
 
 <details>
 <summary>API Reference</summary>
@@ -169,6 +173,8 @@ PacketApi.OnError += error =>
 | `Throttled` | Sending too fast |
 | `PayloadTooLarge` | Payload was over 4KB |
 | `InvalidFrame` | Malformed message |
+| `NamespaceForbidden` | Attempted to send outside the namespaces declared for this session |
+| `NamespaceMismatch` | Channel name was malformed or used an invalid namespace shape |
 | `ConnectionLost` | Unexpected disconnect |
 
 </details>

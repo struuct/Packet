@@ -1,5 +1,5 @@
 using BepInEx;
-using Packet.Behaviors; 
+using Packet.Behaviors;
 using static Packet.HarmonyPatches;
 
 namespace Packet;
@@ -16,7 +16,7 @@ public class Plugin : BaseUnityPlugin
     {
         Apply();
 
-        gameObject.AddComponent<PacketRuntime>();
+        gameObject.AddComponent<Runtime>();
         gameObject.AddComponent<Heartbeat>();
         gameObject.AddComponent<Callbacks>();
     }

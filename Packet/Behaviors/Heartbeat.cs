@@ -13,7 +13,7 @@ internal sealed class Heartbeat : MonoBehaviour
         while (true)
         {
             yield return wait;
-            PacketRuntime.Client.Ping();
+            Runtime.Connection.Ping();
         }
     }
 }

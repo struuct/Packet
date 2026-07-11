@@ -4,8 +4,9 @@ using System.Threading.Tasks;
 
 namespace Packet.Net;
 
-internal sealed class ReconnectPolicy
+internal sealed class Policy
 {
+    static readonly object RandomGate = new();
     static readonly Random _rng = new();
 
     int _attempts;
@@ -16,7 +17,13 @@ internal sealed class ReconnectPolicy
 
     internal async Task WaitAsync(CancellationToken ct)
     {
-        var delay = Math.Min(BaseDelayMs * (1 << _attempts) + _rng.Next(0, 500), 30_000);
+        int jitter;
+        lock (RandomGate)
+        {
+            jitter = _rng.Next(0, 500);
+        }
+
+        var delay = Math.Min(BaseDelayMs * (1 << _attempts) + jitter, 30_000);
         await Task.Delay(delay, ct);
         _attempts++;
     }
